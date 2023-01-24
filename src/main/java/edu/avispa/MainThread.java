@@ -1,8 +1,6 @@
 package edu.avispa;
 
 import java.io.File;
-import java.io.FileWriter;
-import java.io.IOException;
 import java.nio.file.Path;
 import java.nio.file.Paths;
 import java.util.ArrayList;
@@ -17,6 +15,7 @@ import net.sourceforge.argparse4j.impl.Arguments;
 import net.sourceforge.argparse4j.inf.ArgumentParser;
 import net.sourceforge.argparse4j.inf.ArgumentParserException;
 import net.sourceforge.argparse4j.inf.MutuallyExclusiveGroup;
+
 import oshi.SystemInfo;
 import oshi.hardware.GlobalMemory;
 
@@ -34,11 +33,11 @@ public class MainThread {
                 .dest("automataFolder")
                 .required(true);
         parser.addArgument("-o")
-                .dest("outputFile")
-                .setDefault("~/output.txt");
+                .dest("outputFolder")
+                .setDefault("~");
         parser.addArgument("-l")
-                .dest("logFile")
-                .setDefault("~/log.txt");
+                .dest("logFolder")
+                .setDefault("~");
         parser.addArgument("-d")
                 .dest("runDescription")
                 .setDefault("");
@@ -92,10 +91,10 @@ public class MainThread {
 
         final Path WORK_DIR = Paths.get("");
 
-        File outputFile = WORK_DIR
-                .resolve(((String) res.get("outputFile")).replaceFirst("^~", System.getProperty("user.home"))).toFile();
-        File logFile = WORK_DIR
-                .resolve(((String) res.get("logFile")).replaceFirst("^~", System.getProperty("user.home"))).toFile();
+        Path outputFolder = WORK_DIR
+                .resolve(((String) res.get("outputFolder")).replaceFirst("^~", System.getProperty("user.home")));
+        Path logFolder = WORK_DIR
+                .resolve(((String) res.get("logFolder")).replaceFirst("^~", System.getProperty("user.home")));
         File equivalenceProgram = WORK_DIR
                 .resolve(((String) res.get("equivalenceProgram")).replaceFirst("^~", System.getProperty("user.home")))
                 .toFile();
@@ -118,30 +117,15 @@ public class MainThread {
 
         long mainPid = ProcessHandle.current().pid();
 
-        try {
-            FileWriter fwLog = new FileWriter(logFile.getAbsolutePath(), true);
+        Logger logger = new Logger(logFolder, outputFolder);
+        logger.log("START", automataFolder.getPath(), "total comparisons: " + totalComparisons);
+        logger.log("DETAILS", "description:"+ runDescription, "mainPid:" + mainPid, "threadPolicy:"+policy, "initialThreads:"+initialPoolsize);
 
-            fwLog.write(String.join(",", new String[] { "START", String.valueOf(start), automataFolder.getPath(),
-                    "total: " + totalComparisons, "main pid " + mainPid, policy, "\n" }));
-            fwLog.write(String.join(",", new String[] { "DESCRIPTION", runDescription, "\n" }));
-            fwLog.flush();
-            fwLog.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
-
-        CountDownLatch latch = new CountDownLatch(totalComparisons);
+        CountDownLatch remainingComparisons = new CountDownLatch(totalComparisons);
 
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
-                ProcessTask processTask = null;
-                try {
-                    processTask = new ProcessTask(totalComparisons, succesfulComparisons, bisimilarList, automataFolder,
-                            pathnames[i], pathnames[j], outputFile, logFile, memory, equivalenceProgram, latch);
-                } catch (IOException e) {
-                    e.printStackTrace();
-                }
-                assert processTask != null;
+                ProcessTask processTask = new ProcessTask(totalComparisons, automataFolder,pathnames[i], pathnames[j], equivalenceProgram, logger, remainingComparisons, succesfulComparisons, bisimilarList);
                 executor.execute(processTask);
 
             }
@@ -162,44 +146,35 @@ public class MainThread {
 
             int threadPoolSize = initialPoolsize;
 
-            while (latch.getCount() > 0) {
+            while (remainingComparisons.getCount() > 0) {
                 long now = System.currentTimeMillis();
                 if (now - timer > MODULATION_PERIOD) {
                     double usedMemory = 100 - (100 * memory.getAvailable() / memory.getTotal());
-                    System.out.print(now + ", " + usedMemory + "% used memory");
                     if (usedMemory > USED_MEMORY_UPPER_BOUND && threadPoolSize > 1) {
                         threadPoolSize--;
                         executor.setCorePoolSize(threadPoolSize);
                         executor.setMaximumPoolSize(threadPoolSize);
-                        System.out.print(", modulating down to thread pool size " + threadPoolSize);
+                        logger.log("MODULATION", "down to " + threadPoolSize + " threads",usedMemory + "% used memory");
                     } else if (usedMemory < USED_MEMORY_LOWER_BOUND && threadPoolSize < MAXIMUM_POOLSIZE) {
                         threadPoolSize++;
                         executor.setMaximumPoolSize(threadPoolSize);
                         executor.setCorePoolSize(threadPoolSize);
-                        System.out.print(", modulating up to thread pool size " + threadPoolSize);
+                        logger.log("MODULATION", "up to " + threadPoolSize + " threads", usedMemory + "% used memory");
+                    } else {
+                        logger.log("MODULATION", "stable at " + threadPoolSize + " threads", usedMemory + "% used memory");
                     }
-                    System.out.println();
                     timer = System.currentTimeMillis();
                 }
             }
         }
 
-        latch.await();
+        remainingComparisons.await();
 
         long end = System.currentTimeMillis();
 
-        try {
-            FileWriter fwLog = new FileWriter(logFile, true);
+        logger.log("DONE", succesfulComparisons + "/" + totalComparisons + " successful", String.valueOf((end - start)/(1000.0*60))+"m");
 
-            fwLog.write(String.join(",",
-                    new String[] { "DONE", String.valueOf(end),
-                            succesfulComparisons + "/" + totalComparisons + " successful", String.valueOf(end - start),
-                            "\n" }));
-            fwLog.flush();
-            fwLog.close();
-        } catch (IOException e) {
-            e.printStackTrace();
-        }
+        logger.close();
 
     }
 }
