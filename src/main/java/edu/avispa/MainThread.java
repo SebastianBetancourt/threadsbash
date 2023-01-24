@@ -77,7 +77,6 @@ public class MainThread {
 
         int initialPoolsize = 0;
         String policy = "";
-        System.out.println(res);
 
         if (res.get("fixedThreads") != null) {
             initialPoolsize = (int) res.get("fixedThreads");
