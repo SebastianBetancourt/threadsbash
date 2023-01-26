@@ -14,10 +14,13 @@ And let Maven compile classes, pull dependencies, and package the project in a `
 
 ## Usage
 ```
-usage: ThreadSpawner [-h] -E JARPATH -F PATH [-o PATHFILE] [-l PATHFILE] [-d STRING] 
-                    [--ModulationPeriod SECS] [--MemoryUsagePerProcess MB]
-                    [--FixedThreads NUMBER | --ModulateThreads UPPERBOUND LOWERBOUND 
-                    | --CalculateFixedThreads]
+usage: java -jar ./target/threadspawner-1.0-SNAPSHOT.jar  [-h] -E JARPATH -F PATH [-o PATHFILE] 
+                                                          [-l PATHFILE] [-d STRING] 
+                                                          [--ModulationPeriod SECS] 
+                                                          [--MemoryUsagePerProcess MB]
+                                                          [--FixedThreads NUMBER | 
+                                                          --ModulateThreads UPPERBOUND LOWERBOUND 
+                                                          | --CalculateFixedThreads]
 
 -E JARPATH                              Path to the Equivalance checking algorithm .jar implementation. 
                                         It must accept two arguments, two filepaths that point to the 
