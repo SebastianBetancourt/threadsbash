@@ -75,7 +75,6 @@ public class ProcessTask implements Runnable {
             stdInput.readLine();
             stdInput.readLine();
 
-            long timer = System.currentTimeMillis();
             while ((line = stdInput.readLine()) != null) {
                     long now = System.currentTimeMillis();
                     long elapsedTime = now - start;
@@ -92,25 +91,23 @@ public class ProcessTask implements Runnable {
                     logger.log("PROCESS SUCCESSFUL", automatonA, automatonB, bisimilarity, progress, elapsedTime);
                     succesfulComparisons.incrementAndGet();
                 }
-                if (now - timer > memory.modulationPeriod) {
-                    if (memory.modulatingDown()) {
-                       p.destroy();
-                       executor.submit(this);
-                       stdInput.close();
-                       logger.log("MODULATION", automatonA, automatonB, "thread killing itself", memory.getUsedMemory() + "% used memory");
-                       return;
-                    } 
-                    timer = System.currentTimeMillis();
-                }
+
+                if (memory.modulatingDown()) {
+                    p.destroy();
+                    executor.submit(this);
+                    stdInput.close();
+                    logger.log("MODULATION", automatonA, automatonB, "thread killing itself", memory.getUsedMemory() + "% used memory");
+                    return;
+                } 
+    
             }
 
             p.waitFor();
             int exitValue = p.exitValue();
             if (exitValue != 0) {
                 long end = System.currentTimeMillis();
-                String elapsedTime = String.valueOf(end - start);
                 logger.log("PROCESS ERROR", end, automatonA, automatonB,
-                "EXIT VALUE " + exitValue, progress, elapsedTime, memory.getUsedMemory() + "% used memory");
+                "EXIT VALUE " + exitValue, progress, memory.getUsedMemory() + "% used memory");
             }
             stdInput.close();
             this.remainingComparisons.countDown();
