@@ -3,6 +3,7 @@ package edu.avispa;
 import java.io.*;
 import java.util.ArrayList;
 import java.util.concurrent.CountDownLatch;
+import java.util.concurrent.ThreadPoolExecutor;
 import java.util.concurrent.atomic.AtomicInteger;
 
 public class ProcessTask implements Runnable {
@@ -16,6 +17,8 @@ public class ProcessTask implements Runnable {
     private final Logger logger;
     private CountDownLatch remainingComparisons;
     private int totalComparisons;
+    private MemoryManager memory;
+    private ThreadPoolExecutor executor;
 
     ProcessTask(int totalComparisons,
             File automataFolder,
@@ -25,7 +28,9 @@ public class ProcessTask implements Runnable {
             Logger logger,
             CountDownLatch remainingComparisons,
             AtomicInteger succesfulComparisons,
-            ArrayList<String> bisimilarList) {
+            ArrayList<String> bisimilarList,
+            MemoryManager memory,
+            ThreadPoolExecutor executor) {
                 this.totalComparisons = totalComparisons;
         this.succesfulComparisons = succesfulComparisons;
         this.bisimilarList = bisimilarList;
@@ -35,6 +40,8 @@ public class ProcessTask implements Runnable {
         this.logger = logger;
         this.equivalenceProgram = equivalenceProgram;
         this.remainingComparisons = remainingComparisons;
+        this.memory= memory;
+        this.executor = executor;
     }
 
     public void run() {
@@ -56,7 +63,7 @@ public class ProcessTask implements Runnable {
 
             long start = System.currentTimeMillis();
 
-            logger.log("PROCESS START", automatonA, automatonB);
+            logger.log("PROCESS START", automatonA, automatonB, memory.getUsedMemory() + "% used memory");
 
             String progress = (totalComparisons - remainingComparisons.getCount() + 1) + "/" + totalComparisons;
 
@@ -67,10 +74,12 @@ public class ProcessTask implements Runnable {
             stdInput.readLine(); // Done to skip the initial output lines ImplThesis.jar creates, which are very long
             stdInput.readLine();
             stdInput.readLine();
+
+            long timer = System.currentTimeMillis();
             while ((line = stdInput.readLine()) != null) {
+                    long now = System.currentTimeMillis();
+                    long elapsedTime = now - start;
                 if (line.startsWith("Result of bisimulation check:")) {
-                    long end = System.currentTimeMillis();
-                    String elapsedTime = String.valueOf(end - start);
                     String bisimilarity = "";
                     if (line.contains("Result of bisimulation check: true")) {
                         bisimilarity = "BISIM TRUE";
@@ -83,6 +92,16 @@ public class ProcessTask implements Runnable {
                     logger.log("PROCESS SUCCESSFUL", automatonA, automatonB, bisimilarity, progress, elapsedTime);
                     succesfulComparisons.incrementAndGet();
                 }
+                if (now - timer > memory.modulationPeriod) {
+                    if (memory.modulatingDown()) {
+                       p.destroy();
+                       executor.submit(this);
+                       stdInput.close();
+                       logger.log("MODULATION", automatonA, automatonB, "thread killing itself", memory.getUsedMemory() + "% used memory");
+                       return;
+                    } 
+                    timer = System.currentTimeMillis();
+                }
             }
 
             p.waitFor();
@@ -91,7 +110,7 @@ public class ProcessTask implements Runnable {
                 long end = System.currentTimeMillis();
                 String elapsedTime = String.valueOf(end - start);
                 logger.log("PROCESS ERROR", end, automatonA, automatonB,
-                "EXIT VALUE " + exitValue, progress, elapsedTime );
+                "EXIT VALUE " + exitValue, progress, elapsedTime, memory.getUsedMemory() + "% used memory");
             }
             stdInput.close();
             this.remainingComparisons.countDown();

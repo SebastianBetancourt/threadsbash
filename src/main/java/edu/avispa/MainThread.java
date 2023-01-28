@@ -71,21 +71,23 @@ public class MainThread {
             System.exit(1);
         }
 
-        SystemInfo si = new SystemInfo();
-        GlobalMemory memory = si.getHardware().getMemory();
 
         int initialPoolsize = 0;
         String policy = "";
-
+        
+        MemoryManager memory = new MemoryManager(0, 100, 0);
         if (res.get("fixedThreads") != null) {
             initialPoolsize = (int) res.get("fixedThreads");
             policy = "FixedThreads";
         } else if (res.get("bounds") != null) {
-            initialPoolsize = 1;
+            initialPoolsize = 12;
+            ArrayList<Integer> bounds = (ArrayList<Integer>) res.get("bounds");
+            final long modulationPeriod = (long) 1000 * (int) res.get("modulationPeriod"); // modulation every
+            memory = new MemoryManager(bounds.get(0), bounds.get(1), modulationPeriod);
             policy = "Modulated";
         } else {
             long memoryUsagePerProcess = 1000000L * (int) res.get("memoryUsagePerProcess");
-            initialPoolsize = (int) Math.floor(memory.getTotal() / memoryUsagePerProcess);
+            initialPoolsize = (int) Math.floor( memory.totalMemory / memoryUsagePerProcess);
             policy = "CalculatedFixedThreads";
         }
 
@@ -125,22 +127,16 @@ public class MainThread {
 
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
-                ProcessTask processTask = new ProcessTask(totalComparisons, automataFolder,pathnames[i], pathnames[j], equivalenceProgram, logger, remainingComparisons, succesfulComparisons, bisimilarList);
+                ProcessTask processTask = new ProcessTask(totalComparisons, automataFolder,pathnames[i], pathnames[j], equivalenceProgram, logger, remainingComparisons, succesfulComparisons, bisimilarList, memory, executor);
                 executor.execute(processTask);
 
             }
         }
 
-        executor.shutdown();
+
 
         if (policy == "Modulated") {
-            ArrayList<Integer> bounds = (ArrayList<Integer>) res.get("bounds");
-            final long MODULATION_PERIOD = (long) 1000 * (int) res.get("modulationPeriod"); // modulation every
-                                                                                            // MODULATION_PERIOD
-                                                                                            // milliseconds
             final int MAXIMUM_POOLSIZE = Runtime.getRuntime().availableProcessors();
-            final int USED_MEMORY_LOWER_BOUND = bounds.get(0); // in percentage
-            final int USED_MEMORY_UPPER_BOUND = bounds.get(1); // in percentage
 
             long timer = System.currentTimeMillis();
 
@@ -148,26 +144,28 @@ public class MainThread {
 
             while (remainingComparisons.getCount() > 0) {
                 long now = System.currentTimeMillis();
-                if (now - timer > MODULATION_PERIOD) {
-                    double usedMemory = 100 - (100 * memory.getAvailable() / memory.getTotal());
-                    if (usedMemory > USED_MEMORY_UPPER_BOUND && threadPoolSize > 1) {
+                if (now - timer > memory.modulationPeriod) {
+                    String modulation;
+                    if (memory.modulatingDown() && threadPoolSize > 1) {
                         threadPoolSize--;
                         executor.setCorePoolSize(threadPoolSize);
                         executor.setMaximumPoolSize(threadPoolSize);
-                        logger.log("MODULATION", "down to " + threadPoolSize + " threads",usedMemory + "% used memory");
-                    } else if (usedMemory < USED_MEMORY_LOWER_BOUND && threadPoolSize < MAXIMUM_POOLSIZE) {
+                        modulation = "down";
+                    } else if (memory.modulatingUp() && threadPoolSize < MAXIMUM_POOLSIZE) {
                         threadPoolSize++;
                         executor.setMaximumPoolSize(threadPoolSize);
                         executor.setCorePoolSize(threadPoolSize);
-                        logger.log("MODULATION", "up to " + threadPoolSize + " threads", usedMemory + "% used memory");
+                        modulation = "up";
                     } else {
-                        logger.log("MODULATION", "stable at " + threadPoolSize + " threads", usedMemory + "% used memory");
+                        modulation = "stable";
                     }
+                    logger.log("MODULATION", modulation,"now " + threadPoolSize + " threads", memory.getUsedMemory() + "% used memory");
                     timer = System.currentTimeMillis();
                 }
             }
         }
 
+        executor.shutdown();
         remainingComparisons.await();
 
         long end = System.currentTimeMillis();
