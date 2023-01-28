@@ -36,7 +36,7 @@ public class MainThread {
     public static int totalComparisons;
     public static ThreadPoolExecutor executor;
 
-    public static void main(String[] args) throws InterruptedException {
+    public static void main(String[] args) {
 
         ArgumentParser parser = buildParser();
         Map<String, Object> res = null;
@@ -48,8 +48,7 @@ public class MainThread {
         }
 
         memory = new SystemInfo().getHardware().getMemory();
-        totalMemory = 13271293; //memory.getTotal();
-        long swapMemory = 4294967;
+        totalMemory = memory.getTotal();
         int initialPoolsize;
         String policy;
         long modulationPeriod = 0;
@@ -114,11 +113,9 @@ public class MainThread {
         }
 
         long timer = System.currentTimeMillis();
-        // int threadPoolSize = initialPoolsize;
         final int MAXIMUM_POOLSIZE = Runtime.getRuntime().availableProcessors();
         while (remainingComparisons.getCount() > 0) {
-            long availableMemory = (memory.getAvailable() / 1000);
-            usedMemory = 100 - (100 * (availableMemory-swapMemory) / totalMemory);
+            usedMemory = (long) (100 * (1.0 - ((double) memory.getAvailable() / totalMemory)));
             if (policy == "Modulated") {
                 long now = System.currentTimeMillis();
                 if (now - timer > modulationPeriod) {
@@ -137,34 +134,16 @@ public class MainThread {
                     timer = System.currentTimeMillis();
                 }
             }
-            // full modulation from main thread
-            // while(false && policy == "Modulated" && (usedMemory > upperBound ||
-            // usedMemory < lowerBound)) {
-            // long now = System.currentTimeMillis();
-            // if (now - timer > modulationPeriod) {
-            // String modulation;
-            // if (usedMemory > upperBound && threadPoolSize > 1) {
-            // threadPoolSize--;
-            // executor.setCorePoolSize(threadPoolSize);
-            // executor.setMaximumPoolSize(threadPoolSize);
-            // modulation = "down";
-            // } else if (usedMemory < lowerBound && threadPoolSize < MAXIMUM_POOLSIZE) {
-            // threadPoolSize++;
-            // executor.setMaximumPoolSize(threadPoolSize);
-            // executor.setCorePoolSize(threadPoolSize);
-            // modulation = "up";
-            // } else {
-            // modulation = "stable";
-            // }
-            // usedMemory = 100 - (100 * memory.getAvailable() / totalMemory);
-            // logger.log("MODULATION", modulation,"now " + threadPoolSize + " threads");
-            // timer = System.currentTimeMillis();
-            // }
-            // }
         }
 
         executor.shutdown();
-        remainingComparisons.await();
+        try {
+            remainingComparisons.await();
+        } catch (InterruptedException e) {
+            logger.log("ERROR",
+                    e.getLocalizedMessage());
+            e.printStackTrace();
+        }
 
         long totalElapsedTime = System.currentTimeMillis() - start;
 
@@ -174,6 +153,20 @@ public class MainThread {
 
         logger.close();
 
+    }
+
+    public static synchronized void modulateDown() {
+        int threadPoolSize = executor.getPoolSize();
+        String modulation;
+        if (usedMemory > upperBound && threadPoolSize > 1) {
+            threadPoolSize--;
+            executor.setCorePoolSize(threadPoolSize);
+            executor.setMaximumPoolSize(threadPoolSize);
+            modulation = "down";
+        } else {
+            modulation = "stable";
+        }
+        logger.log("MODULATION", modulation, "now " + threadPoolSize + " threads");
     }
 
     private static ArgumentParser buildParser() {
@@ -232,19 +225,5 @@ public class MainThread {
                 .action(Arguments.storeTrue());
 
         return parser;
-    }
-
-    public static synchronized void modulate() {
-        int threadPoolSize = executor.getPoolSize();
-        String modulation;
-        if (usedMemory > upperBound && threadPoolSize > 1) {
-            threadPoolSize--;
-            executor.setCorePoolSize(threadPoolSize);
-            executor.setMaximumPoolSize(threadPoolSize);
-            modulation = "down";
-        } else {
-            modulation = "stable";
-        }
-        logger.log("MODULATION", modulation, "now " + threadPoolSize + " threads");
     }
 }
