@@ -7,6 +7,7 @@ import java.nio.file.Path;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
+import java.time.temporal.ChronoUnit;
 
 public class Logger implements Closeable{
     private FileWriter log;
@@ -20,6 +21,7 @@ public class Logger implements Closeable{
             this.log = new FileWriter(logPath, true);
             this.output = new FileWriter(outputPath, true);
             System.out.println("output to: "+outputPath+", logging to: "+logPath);
+            log.write("timestamp,memory usage%,event,\n");
         } catch (IOException e) {
             e.printStackTrace();
         }        
@@ -34,9 +36,10 @@ public class Logger implements Closeable{
     }
 
     private synchronized void write(FileWriter w, Object[] entry) {
-        String timestamp = ZonedDateTime.now(ZoneOffset.of("-5")).format(DateTimeFormatter.ISO_ZONED_DATE_TIME);
+        String timestamp = ZonedDateTime.now(ZoneOffset.of("-5")).truncatedTo(ChronoUnit.SECONDS).format(DateTimeFormatter.ISO_ZONED_DATE_TIME);
+        String memory = String.valueOf(MainThread.usedMemory);
         try {
-            w.write(timestamp+",");
+            w.write(timestamp+","+memory+",");
             for (Object s : entry) {
                 w.write(s.toString()+",");
             }
