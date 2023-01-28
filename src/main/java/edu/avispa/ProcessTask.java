@@ -1,54 +1,33 @@
 package edu.avispa;
 
 import java.io.*;
-import java.util.ArrayList;
-import java.util.concurrent.CountDownLatch;
-import java.util.concurrent.atomic.AtomicInteger;
 
 public class ProcessTask implements Runnable {
 
-    private final ArrayList<String> bisimilarList;
-    private final File automataFolder;
     private final String automatonA;
     private final String automatonB;
-    private final File equivalenceProgram;
-    private final AtomicInteger succesfulComparisons;
-    private final Logger logger;
-    private CountDownLatch remainingComparisons;
-    private int totalComparisons;
+    private final int thTry;
 
-    ProcessTask(int totalComparisons,
-            File automataFolder,
-            String automatonA,
-            String automatonB,
-            File equivalenceProgram,
-            Logger logger,
-            CountDownLatch remainingComparisons,
-            AtomicInteger succesfulComparisons,
-            ArrayList<String> bisimilarList) {
-                this.totalComparisons = totalComparisons;
-        this.succesfulComparisons = succesfulComparisons;
-        this.bisimilarList = bisimilarList;
-        this.automataFolder = automataFolder;
+    ProcessTask(String automatonA, String automatonB, int thTry) {
         this.automatonA = automatonA;
         this.automatonB = automatonB;
-        this.logger = logger;
-        this.equivalenceProgram = equivalenceProgram;
-        this.remainingComparisons = remainingComparisons;
+        this.thTry = thTry;
     }
 
     public void run() {
-
+        Logger logger = MainThread.logger;
+        final String comparisonId = this.automatonA.concat("-").concat(automatonB).concat("-" + thTry);
         try {
+
             logger.output(this.automatonA.concat(" ").concat(automatonB));
 
             String[] cmd = { "java",
                     "-Djava.library.path=PATH/x64_linux-gnu",
                     "-cp",
-                    this.equivalenceProgram.getAbsolutePath(),
+                    MainThread.equivalenceProgram.getAbsolutePath(),
                     "main.Main",
-                    this.automataFolder.getAbsolutePath().concat(File.separator).concat(this.automatonA),
-                    this.automataFolder.getAbsolutePath().concat(File.separator).concat(this.automatonB), };
+                    MainThread.automataFolder.getAbsolutePath().concat(File.separator).concat(this.automatonA),
+                    MainThread.automataFolder.getAbsolutePath().concat(File.separator).concat(this.automatonB), };
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectError(new File("/dev/null"));
@@ -56,52 +35,63 @@ public class ProcessTask implements Runnable {
 
             long start = System.currentTimeMillis();
 
-            logger.log("PROCESS START", automatonA, automatonB);
-
-            String progress = (totalComparisons - remainingComparisons.getCount() + 1) + "/" + totalComparisons;
+            logger.log("PROCESS START", comparisonId);
 
             BufferedReader stdInput = new BufferedReader(new InputStreamReader(p.getInputStream()));
 
             String line = null;
 
-            stdInput.readLine(); // Done to skip the initial output lines ImplThesis.jar creates, which are very long
-            stdInput.readLine();
-            stdInput.readLine();
             while ((line = stdInput.readLine()) != null) {
+                long now = System.currentTimeMillis();
+                long elapsedTime = now - start;
                 if (line.startsWith("Result of bisimulation check:")) {
-                    long end = System.currentTimeMillis();
-                    String elapsedTime = String.valueOf(end - start);
                     String bisimilarity = "";
                     if (line.contains("Result of bisimulation check: true")) {
                         bisimilarity = "BISIM TRUE";
-                        this.bisimilarList.add(automatonA.concat("<->").concat(automatonB));
-                        logger.output(automatonA, automatonB, elapsedTime, bisimilarList.size(), String.join("  ", this.bisimilarList));
+                        MainThread.bisimilarList.add(automatonA.concat("<->").concat(automatonB));
+                        logger.output(automatonA, automatonB, elapsedTime, MainThread.bisimilarList.size(),
+                                String.join("  ", MainThread.bisimilarList));
                     } else if (line.startsWith("Result of bisimulation check: false")) {
                         bisimilarity = "BISIM FALSE";
                         logger.output(automatonA, automatonB, elapsedTime);
                     }
-                    logger.log("PROCESS SUCCESSFUL", automatonA, automatonB, bisimilarity, progress, elapsedTime);
-                    succesfulComparisons.incrementAndGet();
+                    logger.log("PROCESS SUCCESSFUL", comparisonId, bisimilarity, getTotalProgress(),
+                            (elapsedTime / 1000.0) + "s");
+                    MainThread.succesfulComparisons.incrementAndGet();
                 }
             }
 
             p.waitFor();
             int exitValue = p.exitValue();
             if (exitValue != 0) {
-                long end = System.currentTimeMillis();
-                String elapsedTime = String.valueOf(end - start);
-                logger.log("PROCESS ERROR", end, automatonA, automatonB,
-                "EXIT VALUE " + exitValue, progress, elapsedTime );
+                MainThread.modulateDown();
+                long now = System.currentTimeMillis();
+                long elapsedTime = now - start;
+                logger.log("PROCESS ERROR", comparisonId, "EXIT VALUE " + exitValue, getTotalProgress(),
+                        (elapsedTime / 1000.0) + "s");
+                if (thTry < 10) {
+                    MainThread.executor.submit(new ProcessTask(automatonA, automatonB, thTry + 1));
+                    logger.log("REQUEUEING", comparisonId);
+                }
+
             }
+            if (exitValue == 0 || thTry >= 10) {
+                MainThread.remainingComparisons.countDown();
+            }
+
             stdInput.close();
-            this.remainingComparisons.countDown();
 
         } catch (Exception e) {
-            logger.log("ERROR", System.currentTimeMillis(), automatonA, automatonB,
-            e.getLocalizedMessage() );
-            this.remainingComparisons.countDown();
+            logger.log("ERROR", comparisonId,
+                    e.getLocalizedMessage());
+            MainThread.remainingComparisons.countDown();
             e.printStackTrace();
         }
 
+    }
+
+    private String getTotalProgress(){
+        return (MainThread.totalComparisons - MainThread.remainingComparisons.getCount() + 1) + "/"
+        + MainThread.totalComparisons;
     }
 }
