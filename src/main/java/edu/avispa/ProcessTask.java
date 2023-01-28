@@ -6,15 +6,17 @@ public class ProcessTask implements Runnable {
 
     private final String automatonA;
     private final String automatonB;
+    private final int thTry;
 
-    ProcessTask(String automatonA, String automatonB) {
+    ProcessTask(String automatonA, String automatonB, int thTry) {
         this.automatonA = automatonA;
         this.automatonB = automatonB;
+        this.thTry = thTry;
     }
 
     public void run() {
         Logger logger = MainThread.logger;
-        final String comparisonId = this.automatonA.concat("-").concat(automatonB);
+        final String comparisonId = this.automatonA.concat("-").concat(automatonB).concat("-"+thTry);
         try {
 
             logger.output(this.automatonA.concat(" ").concat(automatonB));
@@ -66,10 +68,9 @@ public class ProcessTask implements Runnable {
                     MainThread.succesfulComparisons.incrementAndGet();
                 }
 
-                if (MainThread.usedMemory >= MainThread.upperBound) {
+                if (false && MainThread.usedMemory >= MainThread.upperBound) {
                     p.destroy();
-                    MainThread.modulate();
-                    MainThread.executor.submit(new ProcessTask(automatonA, automatonB));
+
                     stdInput.close();
                     logger.log("SUICIDE", comparisonId);
                     return;
@@ -81,11 +82,19 @@ public class ProcessTask implements Runnable {
             int exitValue = p.exitValue();
             if (exitValue != 0) {
                 long end = System.currentTimeMillis();
+                MainThread.modulate();
                 logger.log("PROCESS ERROR", comparisonId, end,
-                        "EXIT VALUE " + exitValue, progress);
+                "EXIT VALUE " + exitValue, progress);
+                if(thTry < 10){
+                    MainThread.executor.submit(new ProcessTask(automatonA, automatonB, thTry+1));
+                    logger.log("REQUEUEING", comparisonId);
+                }
+
+            } else if(exitValue == 0 || thTry >= 10){
+                MainThread.remainingComparisons.countDown();
             }
+
             stdInput.close();
-            MainThread.remainingComparisons.countDown();
 
         } catch (Exception e) {
             logger.log("ERROR", comparisonId,

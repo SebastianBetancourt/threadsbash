@@ -48,8 +48,8 @@ public class MainThread {
         }
 
         memory = new SystemInfo().getHardware().getMemory();
-        totalMemory = memory.getTotal();
-
+        totalMemory = 13271293; //memory.getTotal();
+        long swapMemory = 4294967;
         int initialPoolsize;
         String policy;
         long modulationPeriod = 0;
@@ -107,7 +107,7 @@ public class MainThread {
 
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
-                ProcessTask processTask = new ProcessTask(pathnames[i], pathnames[j]);
+                ProcessTask processTask = new ProcessTask(pathnames[i], pathnames[j], 1);
                 executor.execute(processTask);
 
             }
@@ -117,7 +117,8 @@ public class MainThread {
         // int threadPoolSize = initialPoolsize;
         final int MAXIMUM_POOLSIZE = Runtime.getRuntime().availableProcessors();
         while (remainingComparisons.getCount() > 0) {
-            usedMemory = 100 - (100 * memory.getAvailable() / totalMemory);
+            long availableMemory = (memory.getAvailable() / 1000);
+            usedMemory = 100 - (100 * (availableMemory-swapMemory) / totalMemory);
             if (policy == "Modulated") {
                 long now = System.currentTimeMillis();
                 if (now - timer > modulationPeriod) {
