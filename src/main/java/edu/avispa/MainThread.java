@@ -31,10 +31,12 @@ public class MainThread {
     public static File automataFolder;
     public static File equivalenceProgram;
     public static AtomicInteger succesfulComparisons;
+    public static AtomicInteger inferredComparisons;
     public static Logger logger;
     public static CountDownLatch remainingComparisons;
     public static int totalComparisons;
     public static ThreadPoolExecutor executor;
+    public static boolean transitivityInference;
 
     public static void main(String[] args) {
 
@@ -80,14 +82,17 @@ public class MainThread {
         automataFolder = new File(
                 ((String) res.get("automataFolder")).replaceFirst("^~", System.getProperty("user.home")));
         String runDescription = (String) res.get("runDescription");
-
+        transitivityInference = (Boolean) res.get("transitivityInference");
         executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(initialPoolsize);
+        Class.init();
+
 
         final String[] pathnames = automataFolder.list();
         assert pathnames != null;
         int n = pathnames.length;
 
         succesfulComparisons = new AtomicInteger();
+        inferredComparisons = new AtomicInteger();
         bisimilarList = new ArrayList<>();
 
         long start = System.currentTimeMillis();
@@ -100,7 +105,7 @@ public class MainThread {
         logger.log("START", automataFolder.getPath(), "total comparisons: " + totalComparisons);
         logger.log("DETAILS", "description:" + runDescription, "mainPid:" + mainPid, "threadPolicy:" + policy,
                 "bounds:" + lowerBound + "-" + upperBound, "initialThreads:" + initialPoolsize,
-                "maxThreadsAvailable:" + Runtime.getRuntime().availableProcessors());
+                "maxThreadsAvailable:" + Runtime.getRuntime().availableProcessors(), "transitivityInference:",transitivityInference);
 
         remainingComparisons = new CountDownLatch(totalComparisons);
 
@@ -108,7 +113,6 @@ public class MainThread {
             for (int j = i + 1; j < n; j++) {
                 ProcessTask processTask = new ProcessTask(pathnames[i], pathnames[j], 1);
                 executor.execute(processTask);
-
             }
         }
 
@@ -147,10 +151,15 @@ public class MainThread {
 
         long totalElapsedTime = System.currentTimeMillis() - start;
 
-        logger.log("DONE", "totalComparisons:" + totalComparisons, "successfulComparisons:" + succesfulComparisons,
+        logger.log("DONE", "totalComparisons:" + totalComparisons, "successfulComparisons:" + succesfulComparisons, "inferredComparisons:", inferredComparisons,
                 "totalElapsedTime:" + (totalElapsedTime / (1000.0 * 60)) + "m",
                 "avgComparison:" + totalElapsedTime / (1000.0 * totalComparisons) + "s");
-
+        if(transitivityInference){
+            for (Class c : Class.equivalentClasses) {
+                logger.log("EQUIVALENCE CLASSES", c.equivalent.toString());
+            }
+        }
+        
         logger.close();
 
     }
@@ -208,6 +217,11 @@ public class MainThread {
                 .help("Initial size of the pool, for either fixedThread or ModulateThread policies")
                 .type(int.class)
                 .setDefault(1);
+        parser.addArgument("--NotTransitive", "-nt")
+                .dest("transitivityInference")
+                .help("Tells the program to not infer equivalences from results computed previously in the run, not taking advantage of transitivity. This forces the program to go through all comparisons.")
+                .action(Arguments.storeFalse())
+                .setDefault(true);
 
         MutuallyExclusiveGroup threadPolicies = parser.addMutuallyExclusiveGroup("Thread pool size policy");
         threadPolicies.addArgument("--FixedThreads")

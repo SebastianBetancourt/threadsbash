@@ -17,8 +17,30 @@ public class ProcessTask implements Runnable {
     public void run() {
         Logger logger = MainThread.logger;
         final String comparisonId = this.automatonA.concat("-").concat(automatonB).concat("-" + thTry);
-        try {
 
+        String bisimilarity = "";
+
+        if(MainThread.transitivityInference){
+            Class classOfA = Class.getClassOf(automatonA);
+            boolean alreadyEquivalent = classOfA.equivalent.contains(automatonB);
+            boolean alreadyNotEquivalent = classOfA.notEquivalent.contains(automatonB);
+            if(alreadyEquivalent || alreadyNotEquivalent){
+                if(alreadyEquivalent){
+                    bisimilarity = "BISIM TRUE";
+                    MainThread.bisimilarList.add(automatonA.concat("<->").concat(automatonB));
+                    logger.output(automatonA, automatonB, "INFERRED BY TRANSITIVITY", MainThread.bisimilarList.size(),
+                            String.join("  ", MainThread.bisimilarList));
+                } else if (alreadyNotEquivalent) {
+                    bisimilarity = "BISIM FALSE";
+                    logger.output(automatonA, automatonB, "INFERRED BY TRANSITIVITY");
+                }
+                logger.log("PROCESS INFERRED", comparisonId, bisimilarity, getTotalProgress());
+                MainThread.remainingComparisons.countDown();
+                MainThread.inferredComparisons.incrementAndGet();
+                return;
+            }
+        }
+        try {
             logger.output(this.automatonA.concat(" ").concat(automatonB));
 
             String[] cmd = { "java",
@@ -31,6 +53,7 @@ public class ProcessTask implements Runnable {
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectError(new File("/dev/null"));
+
             Process p = pb.start();
 
             long start = System.currentTimeMillis();
@@ -39,21 +62,36 @@ public class ProcessTask implements Runnable {
 
             BufferedReader stdInput = new BufferedReader(new InputStreamReader(p.getInputStream()));
 
+            stdInput.readLine();
+            stdInput.readLine();
+            stdInput.readLine();
+            stdInput.readLine();
+
             String line = null;
 
             while ((line = stdInput.readLine()) != null) {
-                long now = System.currentTimeMillis();
-                long elapsedTime = now - start;
                 if (line.startsWith("Result of bisimulation check:")) {
-                    String bisimilarity = "";
+                    long now = System.currentTimeMillis();
+                    long elapsedTime = now - start;
+                        Class classOfB =  Class.getClassOf(automatonB);
+                        Class classOfA = Class.getClassOf(automatonA);
+
                     if (line.contains("Result of bisimulation check: true")) {
                         bisimilarity = "BISIM TRUE";
                         MainThread.bisimilarList.add(automatonA.concat("<->").concat(automatonB));
                         logger.output(automatonA, automatonB, elapsedTime, MainThread.bisimilarList.size(),
                                 String.join("  ", MainThread.bisimilarList));
+                        classOfA.equivalent.addAll(classOfB.equivalent);
+                        classOfA.notEquivalent.addAll(classOfB.notEquivalent);
+                        if(!classOfA.equals(classOfB)){
+                            Class.equivalentClasses.remove(classOfB);
+                        }
                     } else if (line.startsWith("Result of bisimulation check: false")) {
                         bisimilarity = "BISIM FALSE";
                         logger.output(automatonA, automatonB, elapsedTime);
+
+                        classOfA.notEquivalent.addAll(classOfB.equivalent);
+                        classOfB.notEquivalent.addAll(classOfA.equivalent);
                     }
                     logger.log("PROCESS SUCCESSFUL", comparisonId, bisimilarity, getTotalProgress(),
                             (elapsedTime / 1000.0) + "s");
@@ -69,9 +107,11 @@ public class ProcessTask implements Runnable {
                 long elapsedTime = now - start;
                 logger.log("PROCESS ERROR", comparisonId, "EXIT VALUE " + exitValue, getTotalProgress(),
                         (elapsedTime / 1000.0) + "s");
-                if (thTry < 10) {
+                if (thTry < 5 && elapsedTime < 300000) {
                     MainThread.executor.submit(new ProcessTask(automatonA, automatonB, thTry + 1));
                     logger.log("REQUEUEING", comparisonId);
+                } else {
+                    logger.log("SKIPPED", comparisonId);
                 }
 
             }
@@ -79,7 +119,7 @@ public class ProcessTask implements Runnable {
                 MainThread.remainingComparisons.countDown();
             }
 
-            stdInput.close();
+             stdInput.close();
 
         } catch (Exception e) {
             logger.log("ERROR", comparisonId,
