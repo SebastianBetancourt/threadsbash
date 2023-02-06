@@ -90,7 +90,6 @@ public class MainThread {
         executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(initialPoolsize);
         Class.init();
 
-
         final String[] pathnames = automataFolder.list();
         assert pathnames != null;
         int n = pathnames.length;
@@ -109,7 +108,9 @@ public class MainThread {
         logger.log("START", automataFolder.getPath(), "total comparisons: " + totalComparisons);
         logger.log("DETAILS", "description:" + runDescription, "mainPid:" + mainPid, "threadPolicy:" + policy,
                 "bounds:" + lowerBound + "-" + upperBound, "initialThreads:" + initialPoolsize,
-                "maxThreadsAvailable:" + Runtime.getRuntime().availableProcessors(), "transitivityInference:"+transitivityInference);
+                "maxThreadsAvailable:" + Runtime.getRuntime().availableProcessors(),
+                "transitivityInference:" + transitivityInference, "tries:" + tries,
+                "maxTimePerComparison:" + maximumTimePerComparison);
 
         remainingComparisons = new CountDownLatch(totalComparisons);
 
@@ -155,15 +156,16 @@ public class MainThread {
 
         long totalElapsedTime = System.currentTimeMillis() - start;
 
-        logger.log("DONE", "totalComparisons:" + totalComparisons, "successfulComparisons:" + succesfulComparisons, "inferredComparisons:", inferredComparisons,
+        logger.log("DONE", "totalComparisons:" + totalComparisons, "successfulComparisons:" + succesfulComparisons,
+                "inferredComparisons:", inferredComparisons,
                 "totalElapsedTime:" + (totalElapsedTime / (1000.0 * 60)) + "m",
                 "avgComparison:" + totalElapsedTime / (1000.0 * totalComparisons) + "s");
-        if(transitivityInference){
+        if (transitivityInference) {
             for (Class c : Class.equivalentClasses) {
                 logger.log("EQUIVALENCE CLASSES", c.equivalent.toString());
             }
         }
-        
+
         logger.close();
 
     }
@@ -179,7 +181,7 @@ public class MainThread {
         } else {
             modulation = "stable";
         }
-        logger.log("MODULATION", modulation,threadPoolSize);
+        logger.log("MODULATION", modulation, threadPoolSize);
     }
 
     private static ArgumentParser buildParser() {
@@ -232,7 +234,7 @@ public class MainThread {
                 .type(int.class)
                 .setDefault(5);
         parser.addArgument("--maximumTimePerComparison", "-mt")
-                .dest("maximumTime")
+                .dest("maximumTimePerComparison")
                 .help("how much time a comparison may last before being interrupted and not requeued. Expressed in seconds. Default = 200s")
                 .type(int.class)
                 .setDefault(200);
