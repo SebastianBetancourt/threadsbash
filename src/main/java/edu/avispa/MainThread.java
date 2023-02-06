@@ -37,6 +37,8 @@ public class MainThread {
     public static int totalComparisons;
     public static ThreadPoolExecutor executor;
     public static boolean transitivityInference;
+    public static int tries;
+    public static long maximumTimePerComparison; // in ms
 
     public static void main(String[] args) {
 
@@ -83,6 +85,8 @@ public class MainThread {
                 ((String) res.get("automataFolder")).replaceFirst("^~", System.getProperty("user.home")));
         String runDescription = (String) res.get("runDescription");
         transitivityInference = (Boolean) res.get("transitivityInference");
+        tries = (int) res.get("tries");
+        maximumTimePerComparison = ((int) res.get("maximumTimePerComparison")) * 1000L;
         executor = (ThreadPoolExecutor) Executors.newFixedThreadPool(initialPoolsize);
         Class.init();
 
@@ -105,7 +109,7 @@ public class MainThread {
         logger.log("START", automataFolder.getPath(), "total comparisons: " + totalComparisons);
         logger.log("DETAILS", "description:" + runDescription, "mainPid:" + mainPid, "threadPolicy:" + policy,
                 "bounds:" + lowerBound + "-" + upperBound, "initialThreads:" + initialPoolsize,
-                "maxThreadsAvailable:" + Runtime.getRuntime().availableProcessors(), "transitivityInference:",transitivityInference);
+                "maxThreadsAvailable:" + Runtime.getRuntime().availableProcessors(), "transitivityInference:"+transitivityInference);
 
         remainingComparisons = new CountDownLatch(totalComparisons);
 
@@ -175,7 +179,7 @@ public class MainThread {
         } else {
             modulation = "stable";
         }
-        logger.log("MODULATION", modulation, "now " + threadPoolSize + " threads");
+        logger.log("MODULATION", modulation,threadPoolSize);
     }
 
     private static ArgumentParser buildParser() {
@@ -222,6 +226,16 @@ public class MainThread {
                 .help("Tells the program to not infer equivalences from results computed previously in the run, not taking advantage of transitivity. This forces the program to go through all comparisons.")
                 .action(Arguments.storeFalse())
                 .setDefault(true);
+        parser.addArgument("--tries", "-t")
+                .dest("tries")
+                .help("How many times the program should requeue and retry a comparisson if it fails. Default = 5")
+                .type(int.class)
+                .setDefault(5);
+        parser.addArgument("--maximumTimePerComparison", "-mt")
+                .dest("maximumTime")
+                .help("how much time a comparison may last before being interrupted and not requeued. Expressed in seconds. Default = 200s")
+                .type(int.class)
+                .setDefault(200);
 
         MutuallyExclusiveGroup threadPolicies = parser.addMutuallyExclusiveGroup("Thread pool size policy");
         threadPolicies.addArgument("--FixedThreads")

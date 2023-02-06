@@ -101,21 +101,22 @@ public class ProcessTask implements Runnable {
 
             p.waitFor();
             int exitValue = p.exitValue();
+            String retryOrSkip = "";
             if (exitValue != 0) {
                 MainThread.modulateDown();
                 long now = System.currentTimeMillis();
                 long elapsedTime = now - start;
-                logger.log("PROCESS ERROR", comparisonId, "EXIT VALUE " + exitValue, getTotalProgress(),
-                        (elapsedTime / 1000.0) + "s");
-                if (thTry < 5 && elapsedTime < 300000) {
+                
+                if (thTry < MainThread.tries && elapsedTime < MainThread.maximumTimePerComparison) {
                     MainThread.executor.submit(new ProcessTask(automatonA, automatonB, thTry + 1));
-                    logger.log("REQUEUEING", comparisonId);
+                    retryOrSkip = "REQUEUEING";
                 } else {
-                    logger.log("SKIPPED", comparisonId);
+                    retryOrSkip = "SKIPPED";
                 }
-
+                logger.log("PROCESS ERROR", comparisonId, "EXIT VALUE " + exitValue, retryOrSkip, thTry + " try", getTotalProgress(),
+                (elapsedTime / 1000.0) + "s");
             }
-            if (exitValue == 0 || thTry >= 10) {
+            if (exitValue == 0 || retryOrSkip == "SKIPPED") {
                 MainThread.remainingComparisons.countDown();
             }
 
