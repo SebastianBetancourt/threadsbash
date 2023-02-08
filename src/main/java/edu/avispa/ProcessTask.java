@@ -1,6 +1,7 @@
 package edu.avispa;
 
 import java.io.*;
+import java.util.concurrent.TimeUnit;
 
 public class ProcessTask implements Runnable {
 
@@ -53,23 +54,25 @@ public class ProcessTask implements Runnable {
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectError(new File("/dev/null"));
-
+            File outputBuffer = File.createTempFile(comparisonId, ".comparisonoutput.temp");
+            pb.redirectOutput(outputBuffer);
             Process p = pb.start();
 
             long start = System.currentTimeMillis();
 
             logger.log("PROCESS START", comparisonId);
+            if(!p.waitFor( MainThread.maximumTimePerComparison,TimeUnit.MILLISECONDS)){
+                logger.log("PROCESS TIMEOUT", comparisonId, thTry + " try", getTotalProgress());
+                MainThread.remainingComparisons.countDown();
+                outputBuffer.delete();
+                return;
+            }
 
-            BufferedReader stdInput = new BufferedReader(new InputStreamReader(p.getInputStream()));
-
-            stdInput.readLine();
-            stdInput.readLine();
-            stdInput.readLine();
-            stdInput.readLine();
+            BufferedReader output = new BufferedReader(new FileReader(outputBuffer));
 
             String line = null;
 
-            while ((line = stdInput.readLine()) != null) {
+            while ((line = output.readLine()) != null) {
                 if (line.startsWith("Result of bisimulation check:")) {
                     long now = System.currentTimeMillis();
                     long elapsedTime = now - start;
@@ -93,13 +96,13 @@ public class ProcessTask implements Runnable {
                         classOfA.notEquivalent.addAll(classOfB.equivalent);
                         classOfB.notEquivalent.addAll(classOfA.equivalent);
                     }
+                    outputBuffer.delete();
                     logger.log("PROCESS SUCCESSFUL", comparisonId, bisimilarity, getTotalProgress(),
                             (elapsedTime / 1000.0) + "s");
                     MainThread.succesfulComparisons.incrementAndGet();
                 }
             }
 
-            p.waitFor();
             int exitValue = p.exitValue();
             String retryOrSkip = "";
             if (exitValue != 0) {
@@ -107,7 +110,7 @@ public class ProcessTask implements Runnable {
                 long now = System.currentTimeMillis();
                 long elapsedTime = now - start;
                 
-                if (thTry < MainThread.tries && elapsedTime < MainThread.maximumTimePerComparison) {
+                if (thTry < MainThread.tries) {
                     MainThread.executor.submit(new ProcessTask(automatonA, automatonB, thTry + 1));
                     retryOrSkip = "REQUEUEING";
                 } else {
@@ -120,7 +123,7 @@ public class ProcessTask implements Runnable {
                 MainThread.remainingComparisons.countDown();
             }
 
-             stdInput.close();
+             output.close();
 
         } catch (Exception e) {
             logger.log("ERROR", comparisonId,
