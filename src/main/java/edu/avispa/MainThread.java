@@ -26,7 +26,7 @@ public class MainThread {
     private static long totalMemory;
     private static GlobalMemory memory;
     public static long usedMemory; // in percentage
-
+    private static String policy;
     public static ArrayList<String> bisimilarList;
     public static File automataFolder;
     public static File equivalenceProgram;
@@ -54,7 +54,6 @@ public class MainThread {
         memory = new SystemInfo().getHardware().getMemory();
         totalMemory = memory.getTotal();
         int initialPoolsize;
-        String policy;
         long modulationPeriod = 0;
         if (res.get("fixedThreads") != null) {
             initialPoolsize = (int) res.get("fixedThreads");
@@ -171,17 +170,19 @@ public class MainThread {
     }
 
     public static synchronized void modulateDown() {
-        int threadPoolSize = executor.getPoolSize();
-        String modulation;
-        if (usedMemory > upperBound && threadPoolSize > 1) {
-            threadPoolSize--;
-            executor.setCorePoolSize(threadPoolSize);
-            executor.setMaximumPoolSize(threadPoolSize);
-            modulation = "down";
-        } else {
-            modulation = "stable";
+        if(policy == "Modulated"){
+            int threadPoolSize = executor.getPoolSize();
+            String modulation;
+            if (usedMemory > upperBound && threadPoolSize > 1) {
+                threadPoolSize--;
+                executor.setCorePoolSize(threadPoolSize);
+                executor.setMaximumPoolSize(threadPoolSize);
+                modulation = "down";
+            } else {
+                modulation = "stable";
+            }
+            logger.log("MODULATION", modulation, threadPoolSize);
         }
-        logger.log("MODULATION", modulation, threadPoolSize);
     }
 
     private static ArgumentParser buildParser() {

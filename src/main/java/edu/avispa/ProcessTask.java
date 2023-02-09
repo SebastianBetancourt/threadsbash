@@ -109,7 +109,6 @@ public class ProcessTask implements Runnable {
                 MainThread.modulateDown();
                 long now = System.currentTimeMillis();
                 long elapsedTime = now - start;
-                
                 if (thTry < MainThread.tries) {
                     MainThread.executor.submit(new ProcessTask(automatonA, automatonB, thTry + 1));
                     retryOrSkip = "REQUEUEING";
