@@ -30,15 +30,23 @@ public class MainThread {
     public static ArrayList<String> bisimilarList;
     public static File automataFolder;
     public static File equivalenceProgram;
-    public static AtomicInteger succesfulComparisons;
-    public static AtomicInteger inferredComparisons;
     public static Logger logger;
     public static CountDownLatch remainingComparisons;
-    public static int totalComparisons;
+    public static int todoComparisons;
     public static ThreadPoolExecutor executor;
     public static boolean transitivityInference;
     public static int tries;
     public static long maximumTimePerComparison; // in ms
+
+    public static AtomicInteger succesfulProcesses;
+    public static AtomicInteger errorProcesses;
+    public static AtomicInteger startedProcesses;
+
+    public static AtomicInteger timedOutComparisons;
+    public static AtomicInteger computedComparisons;
+    public static AtomicInteger skippedComparisons;
+    public static AtomicInteger inferredComparisons;
+    
 
     public static void main(String[] args) {
 
@@ -93,25 +101,30 @@ public class MainThread {
         assert pathnames != null;
         int n = pathnames.length;
 
-        succesfulComparisons = new AtomicInteger();
+        succesfulProcesses = new AtomicInteger();
+        errorProcesses = new AtomicInteger();
+        startedProcesses = new AtomicInteger();
+        timedOutComparisons = new AtomicInteger();
+        computedComparisons = new AtomicInteger();
+        skippedComparisons = new AtomicInteger();
         inferredComparisons = new AtomicInteger();
         bisimilarList = new ArrayList<>();
 
         long start = System.currentTimeMillis();
 
-        totalComparisons = (n * (n - 1)) / 2;
+        todoComparisons = (n * (n - 1)) / 2;
 
         long mainPid = ProcessHandle.current().pid();
 
         logger = new Logger(logFolder, outputFolder);
-        logger.log("START", automataFolder.getPath(), "total comparisons: " + totalComparisons);
+        logger.log("START", automataFolder.getPath(), "total comparisons: " + todoComparisons);
         logger.log("DETAILS", "description:" + runDescription, "mainPid:" + mainPid, "threadPolicy:" + policy,
                 "bounds:" + lowerBound + "-" + upperBound, "initialThreads:" + initialPoolsize,
                 "maxThreadsAvailable:" + Runtime.getRuntime().availableProcessors(),
                 "transitivityInference:" + transitivityInference, "tries:" + tries,
                 "maxTimePerComparison:" + maximumTimePerComparison);
 
-        remainingComparisons = new CountDownLatch(totalComparisons);
+        remainingComparisons = new CountDownLatch(todoComparisons);
 
         for (int i = 0; i < n; i++) {
             for (int j = i + 1; j < n; j++) {
@@ -155,10 +168,12 @@ public class MainThread {
 
         long totalElapsedTime = System.currentTimeMillis() - start;
 
-        logger.log("DONE", "totalComparisons:" + totalComparisons, "successfulComparisons:" + succesfulComparisons,
-                "inferredComparisons:", inferredComparisons,
+        logger.log("DONE",  
                 "totalElapsedTime:" + (totalElapsedTime / (1000.0 * 60)) + "m",
-                "avgComparison:" + totalElapsedTime / (1000.0 * totalComparisons) + "s");
+                "avgComparison:" + totalElapsedTime / (1000.0 * todoComparisons) + "s");
+        logger.log("COMPARISON COUNT","todo",todoComparisons, "skipped",skippedComparisons, "computed", computedComparisons, 
+        "inferred", inferredComparisons, "timedOut", timedOutComparisons);
+        logger.log("PROCESS COUNT","started",startedProcesses,  "successful", succesfulProcesses, "error", errorProcesses);
         if (transitivityInference) {
             for (Class c : Class.equivalentClasses) {
                 logger.log("EQUIVALENCE CLASSES", c.equivalent.toString());

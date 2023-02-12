@@ -61,9 +61,12 @@ public class ProcessTask implements Runnable {
             long start = System.currentTimeMillis();
 
             logger.log("PROCESS START", comparisonId);
+            MainThread.startedProcesses.incrementAndGet();
             if(!p.waitFor( MainThread.maximumTimePerComparison,TimeUnit.MILLISECONDS)){
                 logger.log("PROCESS TIMEOUT", comparisonId, thTry + " try", getTotalProgress());
                 MainThread.remainingComparisons.countDown();
+                MainThread.timedOutComparisons.incrementAndGet();
+                MainThread.errorProcesses.incrementAndGet();
                 outputBuffer.delete();
                 return;
             }
@@ -99,7 +102,8 @@ public class ProcessTask implements Runnable {
                     outputBuffer.delete();
                     logger.log("PROCESS SUCCESSFUL", comparisonId, bisimilarity, getTotalProgress(),
                             (elapsedTime / 1000.0) + "s");
-                    MainThread.succesfulComparisons.incrementAndGet();
+                    MainThread.computedComparisons.incrementAndGet();
+                    MainThread.succesfulProcesses.incrementAndGet();
                 }
             }
 
@@ -114,9 +118,11 @@ public class ProcessTask implements Runnable {
                     retryOrSkip = "REQUEUEING";
                 } else {
                     retryOrSkip = "SKIPPED";
+                    MainThread.skippedComparisons.incrementAndGet();
                 }
                 logger.log("PROCESS ERROR", comparisonId, "EXIT VALUE " + exitValue, retryOrSkip, thTry + " try", getTotalProgress(),
                 (elapsedTime / 1000.0) + "s");
+                MainThread.errorProcesses.incrementAndGet();
             }
             if (exitValue == 0 || retryOrSkip == "SKIPPED") {
                 MainThread.remainingComparisons.countDown();
@@ -134,7 +140,7 @@ public class ProcessTask implements Runnable {
     }
 
     private String getTotalProgress(){
-        return (MainThread.totalComparisons - MainThread.remainingComparisons.getCount() + 1) + "/"
-        + MainThread.totalComparisons;
+        return (MainThread.todoComparisons - MainThread.remainingComparisons.getCount() + 1) + "/"
+        + MainThread.todoComparisons;
     }
 }
