@@ -45,6 +45,7 @@ public class ProcessTask implements Runnable {
             logger.output(this.automatonA.concat(" ").concat(automatonB));
 
             String[] cmd = { "java",
+                    //"-Xmx3072m",
                     "-Djava.library.path=PATH/x64_linux-gnu",
                     "-cp",
                     MainThread.equivalenceProgram.getAbsolutePath(),
