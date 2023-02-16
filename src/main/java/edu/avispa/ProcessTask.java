@@ -47,6 +47,7 @@ public class ProcessTask implements Runnable {
             String[] cmd = { "java",
                     //"-Xmx3072m",
                     "-Djava.library.path=PATH/x64_linux-gnu",
+                    "-XX:ErrorFile=/dev/null",
                     "-cp",
                     MainThread.equivalenceProgram.getAbsolutePath(),
                     "main.Main",
@@ -123,12 +124,13 @@ public class ProcessTask implements Runnable {
                 }
                 logger.log("PROCESS ERROR", comparisonId, "EXIT VALUE " + exitValue, retryOrSkip, thTry + " try", getTotalProgress(),
                 (elapsedTime / 1000.0) + "s");
+                outputBuffer.delete();
                 MainThread.errorProcesses.incrementAndGet();
             }
             if (exitValue == 0 || retryOrSkip == "SKIPPED") {
                 MainThread.remainingComparisons.countDown();
             }
-
+            outputBuffer.delete();
              output.close();
 
         } catch (Exception e) {

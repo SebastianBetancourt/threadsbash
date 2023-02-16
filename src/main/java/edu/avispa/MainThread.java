@@ -171,8 +171,8 @@ public class MainThread {
         logger.log("DONE",  
                 "totalElapsedTime:" + (totalElapsedTime / (1000.0 * 60)) + "m",
                 "avgComparison:" + totalElapsedTime / (1000.0 * todoComparisons) + "s");
-        logger.log("COMPARISON COUNT","todo",todoComparisons, "skipped",skippedComparisons, "computed", computedComparisons, 
-        "inferred", inferredComparisons, "timedOut", timedOutComparisons);
+        logger.log("COMPARISON COUNT","todo",todoComparisons, "computed", computedComparisons, 
+        "inferred", inferredComparisons,"skipped",skippedComparisons, "timedOut", timedOutComparisons);
         logger.log("PROCESS COUNT","started",startedProcesses,  "successful", succesfulProcesses, "error", errorProcesses);
         if (transitivityInference) {
             for (Class c : Class.equivalentClasses) {
