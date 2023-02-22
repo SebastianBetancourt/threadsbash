@@ -84,7 +84,7 @@ public class ProcessTask implements Runnable {
                         Class classOfB =  Class.getClassOf(automatonB);
                         Class classOfA = Class.getClassOf(automatonA);
 
-                    if (line.contains("Result of bisimulation check: true")) {
+                    if (line.startsWith("Result of bisimulation check: true")) {
                         bisimilarity = "BISIM TRUE";
                         MainThread.bisimilarList.add(automatonA.concat("<->").concat(automatonB));
                         logger.output(automatonA, automatonB, elapsedTime, MainThread.bisimilarList.size(),
