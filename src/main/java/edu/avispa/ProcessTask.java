@@ -78,13 +78,12 @@ public class ProcessTask implements Runnable {
             String line = null;
 
             while ((line = output.readLine()) != null) {
-                if (line.startsWith("Result of bisimulation check:")) {
                     long now = System.currentTimeMillis();
                     long elapsedTime = now - start;
                         Class classOfB =  Class.getClassOf(automatonB);
                         Class classOfA = Class.getClassOf(automatonA);
 
-                    if (line.startsWith("Result of bisimulation check: true")) {
+                    if (line.equals("true")) {
                         bisimilarity = "BISIM TRUE";
                         MainThread.bisimilarList.add(automatonA.concat("<->").concat(automatonB));
                         logger.output(automatonA, automatonB, elapsedTime, MainThread.bisimilarList.size(),
@@ -94,7 +93,7 @@ public class ProcessTask implements Runnable {
                         if(!classOfA.equals(classOfB)){
                             Class.equivalentClasses.remove(classOfB);
                         }
-                    } else if (line.startsWith("Result of bisimulation check: false")) {
+                    } else if (line.equals("false")) {
                         bisimilarity = "BISIM FALSE";
                         logger.output(automatonA, automatonB, elapsedTime);
 
@@ -106,7 +105,7 @@ public class ProcessTask implements Runnable {
                             (elapsedTime / 1000.0) + "s");
                     MainThread.computedComparisons.incrementAndGet();
                     MainThread.succesfulProcesses.incrementAndGet();
-                }
+
             }
 
             int exitValue = p.exitValue();
