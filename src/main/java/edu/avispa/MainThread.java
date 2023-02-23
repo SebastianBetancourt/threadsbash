@@ -259,7 +259,8 @@ public class MainThread {
         threadPolicies.addArgument("--FixedThreads")
                 .dest("fixedThreads")
                 .help("Specifies a fixed thread pool size of NUMBER.")
-                .type(int.class);
+                .type(int.class)
+                .setDefault(Runtime.getRuntime().availableProcessors());
         threadPolicies.addArgument("--ModulateThreads", "-m")
                 .nargs(2)
                 .dest("bounds")
