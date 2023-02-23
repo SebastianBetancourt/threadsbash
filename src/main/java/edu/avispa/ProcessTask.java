@@ -56,32 +56,21 @@ public class ProcessTask implements Runnable {
 
             ProcessBuilder pb = new ProcessBuilder(cmd);
             pb.redirectError(new File("/dev/null"));
-            File outputBuffer = File.createTempFile(comparisonId, ".comparisonoutput.temp");
-            pb.redirectOutput(outputBuffer);
             Process p = pb.start();
 
             long start = System.currentTimeMillis();
 
             logger.log("PROCESS START", comparisonId);
             MainThread.startedProcesses.incrementAndGet();
-            if(!p.waitFor( MainThread.maximumTimePerComparison,TimeUnit.MILLISECONDS)){
-                logger.log("PROCESS TIMEOUT", comparisonId, thTry + " try", getTotalProgress());
-                MainThread.remainingComparisons.countDown();
-                MainThread.timedOutComparisons.incrementAndGet();
-                MainThread.errorProcesses.incrementAndGet();
-                outputBuffer.delete();
-                return;
-            }
-
-            BufferedReader output = new BufferedReader(new FileReader(outputBuffer));
-
+            BufferedReader output = new BufferedReader(new InputStreamReader(p.getInputStream()));
+            p.waitFor();
             String line = null;
 
             while ((line = output.readLine()) != null) {
                     long now = System.currentTimeMillis();
                     long elapsedTime = now - start;
-                        Class classOfB =  Class.getClassOf(automatonB);
-                        Class classOfA = Class.getClassOf(automatonA);
+                    Class classOfB =  Class.getClassOf(automatonB);
+                    Class classOfA = Class.getClassOf(automatonA);
 
                     if (line.equals("true")) {
                         bisimilarity = "BISIM TRUE";
@@ -100,7 +89,6 @@ public class ProcessTask implements Runnable {
                         classOfA.notEquivalent.addAll(classOfB.equivalent);
                         classOfB.notEquivalent.addAll(classOfA.equivalent);
                     }
-                    outputBuffer.delete();
                     logger.log("PROCESS SUCCESSFUL", comparisonId, bisimilarity, getTotalProgress(),
                             (elapsedTime / 1000.0) + "s");
                     MainThread.computedComparisons.incrementAndGet();
@@ -123,14 +111,12 @@ public class ProcessTask implements Runnable {
                 }
                 logger.log("PROCESS ERROR", comparisonId, "EXIT VALUE " + exitValue, retryOrSkip, thTry + " try", getTotalProgress(),
                 (elapsedTime / 1000.0) + "s");
-                outputBuffer.delete();
                 MainThread.errorProcesses.incrementAndGet();
             }
             if (exitValue == 0 || retryOrSkip == "SKIPPED") {
                 MainThread.remainingComparisons.countDown();
             }
-            outputBuffer.delete();
-             output.close();
+            output.close();
 
         } catch (Exception e) {
             logger.log("ERROR", comparisonId,
