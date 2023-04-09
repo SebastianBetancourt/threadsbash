@@ -1,4 +1,4 @@
-# ThreadSpawner
+# ThreadsBash
 
 Program that spawns Java processes in parallel, by executing a .jar file with certain parameters. The purpose is to parallelize bisimulation equivalence checking between a set of timed automata, in a everyone-vs-everyone round robin fashion.
 
